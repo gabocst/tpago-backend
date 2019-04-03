@@ -38,7 +38,7 @@ services:
       - database_network
     volumes:
       - database_volume:/var/lib/postgresql/data
-    
+  
             
 networks:
   nginx_network:

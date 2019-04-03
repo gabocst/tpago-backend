@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'product.apps.ProductConfig',
+    'user.apps.UserConfig'
 ]
 
 MIDDLEWARE = [
@@ -81,11 +82,11 @@ WSGI_APPLICATION = 'tpaga.wsgi.application'
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.postgresql_psycopg2",
-		"NAME": "tpaga",
-		"USER": "postgres",
-		"PASSWORD": "",
-		"HOST": "appdb",
-		"PORT": "5432",
+        "NAME": "tpaga",
+        "USER": "postgres",
+        "PASSWORD": "password",
+        "HOST": "appdb",
+        "PORT": "5432",
     }
 }
 
@@ -95,10 +96,14 @@ REST_FRAMEWORK = {
     # or allow read-only access for unauthenticated users.
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly'
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ]
 }
 
-
+AUTH_USER_MODEL = "user.User"
 # Password validation
 # https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
 

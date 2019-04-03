@@ -12,4 +12,10 @@ class ProductSerializer(serializers.ModelSerializer):
 class SaleSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Sale
+		fields = ("id", "amount", "terminal_id", "purchase_description", "purchase_items", "user_ip_address", "product")
+
+
+class SaleListSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = Sale
 		fields = ("__all__")
