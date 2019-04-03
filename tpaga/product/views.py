@@ -5,7 +5,9 @@ import uuid
 import requests
 from requests.auth import HTTPBasicAuth
 import os
+from rest_framework import status
 import datetime
+from django.utils.translation import gettext_lazy as _
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from django.views.decorators.csrf import csrf_exempt
@@ -18,15 +20,15 @@ from .models import Product, Sale
 from .serializers import ProductSerializer, SaleListSerializer, SaleSerializer
 
 
-class SaleCreateAPIView(CreateAPIView):
-	queryset = Sale.objects.all()
-	serializer_class = SaleSerializer
-	permission_classes = [AllowAny]
-
-
 class SaleListAPIView(ListAPIView):
 	queryset = Sale.objects.all()
 	serializer_class = SaleListSerializer
+	permission_classes = [AllowAny]
+
+
+class ProductListAPIView(ListAPIView):
+	queryset = Product.objects.all()
+	serializer_class = ProductSerializer
 	permission_classes = [AllowAny]
 
 
@@ -39,75 +41,107 @@ class SaleRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes((AllowAny, ))
-def createSale(request):
+def paymentRequest(request):
 	
 	try:
 		body_unicode = request.body.decode('utf-8')
 		body = json.loads(body_unicode)
-		print(body)
-		product = Product.objects.get(id=body['product'])
-		print(product["cost"])
+		#product = Product.objects.get(id=body['product']['id'])
 		client = Client()
 
+		total = body['quantity'] * body['product']['cost']
+		
+		sale = Sale(
+			total=total,
+			terminal_id=body['terminal_id'],
+			purchase_description=body['purchase_description'],
+			token=None,
+			status=None,
+			user_ip_address=body['user_ip_address']
+		)
+		sale.save()
+		print(f"REVISAR: {sale.pk}")
+
 		r = client.create_payment_request(
-			body['cost'],
-			'https://example.com/compra/348820',
-			'https://example.com/comprobante/348820',
-			body['cost'],  #order_id luego de ingresar en bd
+			total,
+			'https://example.com/compra/348820', #link finalizacion de compra (gracias por su compra)
+			None,
+			sale.pk,  
 			body['terminal_id'],
 			body['purchase_description'],
 			body['user_ip_address'],
 		)
+		response = json.loads(r)
 
-		print(json.loads(r))
-		#response = json.loads(r)
-		#res = json.dumps(response, indent=4, sort_keys=True)
-		#print(res)
-
+		sale.token = response["token"]
+		sale.status = response["status"]
+		sale.save()
 		
-
-
-
 	except Exception as ex:
-		#error = {'{}'.format(_("strings.detail")): ",".join(ex.args) if ex.args else '{}'.format(_("strings.unknown_error"))}
-		return Response(ex, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+		error = {'{}'.format(_('detail')): ",".join(ex.args) if ex.args else '{}'.format(_('Unknown Error'))}		
+		return Response(error, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-	return Response("serializer.data", status=status.HTTP_201_CREATED)
-
-
+	return Response(response, status=status.HTTP_201_CREATED)
 
 
-
-
-
-# @csrf_exempt
-# @api_view(['POST'])
-# @permission_classes((AllowAny, ))
-# def createSale(request):
+@api_view(['GET'])
+@permission_classes((AllowAny, ))
+def paymentRequestConfirmation(request, token):
 	
-# 	try:
-# 		body_unicode = request.body.decode('utf-8')
-# 		body = json.loads(body_unicode)
+	client = Client()
+	r = client.payment_request_confirmation(
+		token,
+	)
+	response = json.loads(r)
 
-# 		#dateStart = timezone.now()
+	sale = Sale.objects.filter(token=token).update(status=response["status"])
 
-# 		#crear json
-
-# 		#hacer la llamada post desde aqui
-# 		trade = Trade.objects.create(
-# 			user=request.user,
-# 			dateStart=dateStart,
-# 			description=body['trade']['description'],
-# 			tradeType=body['trade']['tradeType'],
-# 			minAmount=body['trade']['minAmount'],
-# 			maxAmount=body['trade']['maxAmount'],
-# 			limitToFiatAmount=body['trade']['limitToFiatAmount'],
-# 			currency=Currency.objects.get(id=body['trade']['currency']),
-# 			price=body['trade']['price'])
+	return Response(response, status=status.HTTP_200_OK)#ver si retornar lo de tpaga o lo mio
 
 
-# 	except Exception as ex:
-# 		error = {'{}'.format(_(strings.detail)): ",".join(ex.args) if ex.args else '{}'.format(_(strings.unknown_error))}
-# 		return Response(error, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes((AllowAny, ))
+def confirmDelivery(request):
+	
+	try:
+		body_unicode = request.body.decode('utf-8')
+		body = json.loads(body_unicode)
+		client = Client()
 
-# 	return Response(serializer.data, status=status.HTTP_201_CREATED)
+		r = client.confirm_delivery(
+			body['token'],
+		)
+		response = json.loads(r)
+
+		sale = Sale.objects.filter(token=token).update(status=response["status"])
+		
+	except Exception as ex:
+		error = {'{}'.format(_('detail')): ",".join(ex.args) if ex.args else '{}'.format(_('Unknown Error'))}		
+		return Response(error, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+	return Response(response, status=status.HTTP_200_OK)#ver si retornar lo de tpaga o lo mio
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes((AllowAny, ))
+def refund(request):
+	
+	try:
+		body_unicode = request.body.decode('utf-8')
+		body = json.loads(body_unicode)
+		client = Client()
+
+		r = client.refund_payment(
+			body['token'],
+		)
+		response = json.loads(r)
+		
+		sale = Sale.objects.filter(token=token).update(status=response["status"])
+		
+	except Exception as ex:
+		error = {'{}'.format(_('detail')): ",".join(ex.args) if ex.args else '{}'.format(_('Unknown Error'))}		
+		return Response(error, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+	return Response(response, status=status.HTTP_200_OK)

@@ -10,9 +10,11 @@ class ProductSerializer(serializers.ModelSerializer):
 
 
 class SaleSerializer(serializers.ModelSerializer):
+	product = ProductSerializer(read_only=True)
+
 	class Meta:
 		model = Sale
-		fields = ("id", "amount", "terminal_id", "purchase_description", "purchase_items", "user_ip_address", "product")
+		fields = ("id", "total", "terminal_id", "purchase_description", "purchase_items", "user_ip_address")
 
 
 class SaleListSerializer(serializers.ModelSerializer):
