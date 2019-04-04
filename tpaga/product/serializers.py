@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from product.models import Product, Sale
+from product.models import Product, Sale, SaleProduct
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -21,3 +21,12 @@ class SaleListSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Sale
 		fields = ("__all__")
+
+
+class SaleProductListSerializer(serializers.ModelSerializer):
+	product = ProductSerializer(read_only=True)
+	sale = SaleListSerializer(read_only=True)
+
+	class Meta:
+		model = SaleProduct
+		fields = ("id", "sale", "product", "cost", "quantity", "amount")

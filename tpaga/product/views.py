@@ -1,5 +1,5 @@
 from rest_framework.generics import ListAPIView, CreateAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 import json
 import uuid
 import requests
@@ -16,8 +16,8 @@ from rest_framework.decorators import permission_classes, api_view
 
 
 
-from .models import Product, Sale
-from .serializers import ProductSerializer, SaleListSerializer, SaleSerializer
+from .models import Product, Sale, SaleProduct
+from .serializers import ProductSerializer, SaleListSerializer, SaleSerializer, SaleProductListSerializer
 
 
 class SaleListAPIView(ListAPIView):
@@ -38,6 +38,12 @@ class SaleRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
 	permission_classes = [AllowAny]
 
 
+class SaleProductListAPIView(ListAPIView):
+	queryset = SaleProduct.objects.all()
+	serializer_class = SaleProductListSerializer
+	permission_classes = [IsAuthenticated]
+
+
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes((AllowAny, ))
@@ -46,7 +52,7 @@ def paymentRequest(request):
 	try:
 		body_unicode = request.body.decode('utf-8')
 		body = json.loads(body_unicode)
-		#product = Product.objects.get(id=body['product']['id'])
+		product = Product.objects.get(id=body['product']['id'])
 		client = Client()
 
 		total = body['quantity'] * body['product']['cost']
@@ -60,7 +66,6 @@ def paymentRequest(request):
 			user_ip_address=body['user_ip_address']
 		)
 		sale.save()
-		print(f"REVISAR: {sale.pk}")
 
 		r = client.create_payment_request(
 			total,
@@ -76,6 +81,14 @@ def paymentRequest(request):
 		sale.token = response["token"]
 		sale.status = response["status"]
 		sale.save()
+
+		saleProduct = SaleProduct(
+			sale=sale,
+			product=product,
+			cost=body['product']['cost'],
+			quantity=body['quantity']
+		)
+		saleProduct.save()
 		
 	except Exception as ex:
 		error = {'{}'.format(_('detail')): ",".join(ex.args) if ex.args else '{}'.format(_('Unknown Error'))}		
@@ -108,13 +121,11 @@ def confirmDelivery(request):
 		body_unicode = request.body.decode('utf-8')
 		body = json.loads(body_unicode)
 		client = Client()
-
 		r = client.confirm_delivery(
 			body['token'],
 		)
 		response = json.loads(r)
-
-		sale = Sale.objects.filter(token=token).update(status=response["status"])
+		sale = Sale.objects.filter(token=body['token']).update(status=response["status"])
 		
 	except Exception as ex:
 		error = {'{}'.format(_('detail')): ",".join(ex.args) if ex.args else '{}'.format(_('Unknown Error'))}		
@@ -125,7 +136,7 @@ def confirmDelivery(request):
 
 @csrf_exempt
 @api_view(['POST'])
-@permission_classes((AllowAny, ))
+@permission_classes((IsAuthenticated, ))
 def refund(request):
 	
 	try:
@@ -138,7 +149,7 @@ def refund(request):
 		)
 		response = json.loads(r)
 		
-		sale = Sale.objects.filter(token=token).update(status=response["status"])
+		sale = Sale.objects.filter(token=body['token']).update(status=response["status"])
 		
 	except Exception as ex:
 		error = {'{}'.format(_('detail')): ",".join(ex.args) if ex.args else '{}'.format(_('Unknown Error'))}		
